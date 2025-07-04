@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#f3f3f3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Daily Mood & Reflection Journal</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f3f3f3;
+      padding: 2rem;
+      max-width: 700px;
+      margin: auto;
+    }
+    h1, h2, h3 {
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    select, textarea, button, input[type="month"] {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.5rem;
+      font-size: 1rem;
+    }
+    #entry, #calendar-view, #summary-view {
+      margin-top: 2rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    .entry-block {
+      margin-top: 1rem;
+      background: #e9ffe9;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-top: 1rem;
+    }
+    .day-cell {
+      background: #ddd;
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .mood-Happy { background: #ffeaa7; }
+    .mood-Sad { background: #dfe6e9; }
+    .mood-Angry { background: #fab1a0; }
+    .mood-Excited { background: #ffeaa7; }
+    .mood-Anxious { background: #b2bec3; }
+    .mood-Grateful { background: #a3d2ca; }
+    ul { list-style: none; padding: 0; }
+  </style>
+</head>
+<body>
+  <h1>📝 Daily Mood & Reflection</h1>
+
+  <label for="mood">Your Mood Today:</label>
+  <select id="mood">
+    <option value="Happy">😊 Happy</option>
+    <option value="Sad">😔 Sad</option>
+    <option value="Angry">😠 Angry</option>
+    <option value="Excited">🤩 Excited</option>
+    <option value="Anxious">😰 Anxious</option>
+    <option value="Grateful">🙏 Grateful</option>
+  </select>
+
+  <label for="reflection">What’s on your mind today?</label>
+  <textarea id="reflection" rows="5" placeholder="Write freely..."></textarea>
+
+  <button onclick="saveEntry(); playSound();">Save Entry</button>
+
+  <div id="entry">
+    <h3>📖 Your Past Entries</h3>
+    <div id="entries"></div>
+  </div>
+
+  <div id="calendar-view">
+    <h3>📅 Mood Calendar</h3>
+    <label for="monthPicker">Select Month:</label>
+    <input type="month" id="monthPicker" onchange="renderCalendar()" />
+    <div class="calendar-grid" id="calendar"></div>
+    <button onclick="exportCalendar()">Download Mood Calendar (PNG)</button>
+  </div>
+
+  <div id="summary-view">
+    <h3>📊 Monthly Mood Summary</h3>
+    <div id="summary"></div>
+  </div>
+
+  <audio id="ding" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+    const INSIGHTS = [
+      "You stayed strong through ups and downs — keep showing up.",
+      "Your emotional awareness is deepening. That’s power.",
+      "You’ve shown resilience and grace. Be proud.",
+      "There’s growth in every emotion you tracked.",
+      "Your gratitude this month anchored you.",
+      "Moments of anxiety didn’t define your whole month.",
+      "You tapped into joy multiple times — hold on to that.",
+      "This month, you showed up for yourself.",
+      "Your reflections show a mind in transformation.",
+      "Despite stress, your clarity is increasing.",
+      "There’s more balance in your days than you may notice.",
+      "You’ve built emotional momentum — keep it going."
+    ];
+
+    function playSound() {
+      document.getElementById("ding").play();
+    }
+
+    function saveEntry() {
+      const mood = document.getElementById("mood").value;
+      const reflection = document.getElementById("reflection").value;
+      const date = new Date();
+      const dateString = date.toLocaleString();
+      const isoDate = date.toISOString().split("T")[0];
+
+      if (!reflection.trim()) return alert("Please write something.");
+
+      const entry = {
+        date: dateString,
+        isoDate,
+        mood,
+        reflection
+      };
+
+      const allEntries = JSON.parse(localStorage.getItem("journalEntries") || "[]");
+      allEntries.unshift(entry);
+      localStorage.setItem("journalEntries", JSON.stringify(allEntries));
+      document.getElementById("reflection").value = "";
+      loadEntries();
+      renderCalendar();
+    }
+
+    function loadEntries() {
+      const allEntries = JSON.parse(localStorage.getItem("journalEntries") || "[]");
+      const container = document.getElementById("entries");
+      container.innerHTML = allEntries.map(e => `
+        <div class="entry-block">
+          <strong>${e.date}</strong><br />
+          <em>Mood:</em> ${e.mood}<br />
+          <p>${e.reflection}</p>
+        </div>
+      `).join("");
+    }
+
+    function renderCalendar() {
+      const calendar = document.getElementById("calendar");
+      const summary = document.getElementById("summary");
+      calendar.innerHTML = "";
+      summary.innerHTML = "";
+
+      const entries = JSON.parse(localStorage.getItem("journalEntries") || "[]");
+      const entryMap = {};
+      const moodCount = {};
+
+      const monthInput = document.getElementById("monthPicker").value;
+      const today = monthInput ? new Date(monthInput + "-01") : new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const iso = date.toISOString().split("T")[0];
+        const matchingEntry = entries.find(e => e.isoDate === iso);
+        if (matchingEntry) {
+          entryMap[iso] = matchingEntry.mood;
+          moodCount[matchingEntry.mood] = (moodCount[matchingEntry.mood] || 0) + 1;
+        }
+        const mood = entryMap[iso];
+        const cell = document.createElement("div");
+        cell.className = "day-cell" + (mood ? ` mood-${mood}` : "");
+        cell.innerText = d;
+        if (mood) cell.title = mood;
+        calendar.appendChild(cell);
+      }
+
+      const totalDays = Object.values(moodCount).reduce((a, b) => a + b, 0);
+      if (totalDays > 0) {
+        let summaryHTML = '<ul>';
+        for (const mood in moodCount) {
+          const percent = ((moodCount[mood] / totalDays) * 100).toFixed(1);
+          summaryHTML += `<li><strong>${mood}:</strong> ${moodCount[mood]} days (${percent}%)</li>`;
+        }
+        summaryHTML += '</ul>';
+
+        // Add a random insight
+        const insight = INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)];
+        summaryHTML += `<p><em>🧠 Insight:</em> ${insight}</p>`;
+
+        summary.innerHTML = summaryHTML;
+      } else {
+        summary.innerText = "No mood data available for this month.";
+      }
+    }
+
+    function exportCalendar() {
+      html2canvas(document.getElementById("calendar-view")).then(canvas => {
+        const link = document.createElement("a");
+        link.download = `mood-calendar-${new Date().toISOString().split('T')[0]}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    // Reminder: Prompt user daily
+    document.addEventListener('DOMContentLoaded', () => {
+      const lastPrompt = localStorage.getItem('lastPromptDate');
+      const today = new Date().toISOString().split('T')[0];
+      if (lastPrompt !== today) {
+        setTimeout(() => {
+          alert("🌞 Don’t forget to log your mood today!");
+          localStorage.setItem('lastPromptDate', today);
+        }, 3000);
+      }
+    });
+
+    loadEntries();
+    renderCalendar();
+  </script>
+</body>
+</html>
